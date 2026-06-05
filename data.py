@@ -9,11 +9,19 @@ class HuggingFaceDataset(Dataset):
     tokenizes it using a pretrained tokenizer, and chunks it into
     sequences of seq_len for causal language modeling.
     """
-    def __init__(self, dataset_name="wikitext", dataset_config="wikitext-2-raw-v1", split="train", tokenizer_name="gpt2", seq_len=128):
-        print(f"Loading dataset '{dataset_name}' ({dataset_config}) from Hugging Face...")
+    def __init__(self, dataset_name="wikitext", dataset_config="wikitext-2-raw-v1", split="train", tokenizer_name="gpt2", seq_len=128, max_samples=None):
+        print(f"Loading dataset '{dataset_name}' (config: {dataset_config}) split '{split}' from Hugging Face...")
         # Load the dataset
-        raw_dataset = load_dataset(dataset_name, dataset_config, split=split)
+        if dataset_config:
+            raw_dataset = load_dataset(dataset_name, dataset_config, split=split)
+        else:
+            raw_dataset = load_dataset(dataset_name, split=split)
         
+        # Limit samples if requested
+        if max_samples is not None and max_samples < len(raw_dataset):
+            print(f"Slicing dataset to first {max_samples} samples...")
+            raw_dataset = raw_dataset.select(range(max_samples))
+            
         print(f"Loading tokenizer '{tokenizer_name}'...")
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         if self.tokenizer.pad_token is None:
@@ -48,13 +56,14 @@ class HuggingFaceDataset(Dataset):
         y = torch.tensor(chunk[1:], dtype=torch.long)
         return x, y
 
-def get_dataloader(dataset_name="wikitext", dataset_config="wikitext-2-raw-v1", split="train", tokenizer_name="gpt2", seq_len=128, batch_size=8, shuffle=True):
+def get_dataloader(dataset_name="wikitext", dataset_config="wikitext-2-raw-v1", split="train", tokenizer_name="gpt2", seq_len=128, batch_size=8, shuffle=True, max_samples=None):
     dataset = HuggingFaceDataset(
         dataset_name=dataset_name,
         dataset_config=dataset_config,
         split=split,
         tokenizer_name=tokenizer_name,
-        seq_len=seq_len
+        seq_len=seq_len,
+        max_samples=max_samples
     )
     
     loader = DataLoader(

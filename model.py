@@ -13,7 +13,8 @@ class MiniQwen(nn.Module):
         num_layers=4,
         num_heads=8,
         num_kv_heads=2,
-        max_seq_len=256
+        max_seq_len=256,
+        tie_word_embeddings=True
     ):
         super().__init__()
 
@@ -34,6 +35,10 @@ class MiniQwen(nn.Module):
 
         # output head
         self.lm_head = nn.Linear(hidden_dim, vocab_size, bias=False)
+
+        # weight tying
+        if tie_word_embeddings:
+            self.lm_head.weight = self.embed.weight
 
     def forward(self, x):
         """

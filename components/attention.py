@@ -1,10 +1,26 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import math
 try:
     from components.rope import apply_rope, build_rope_cache
 except ModuleNotFoundError:
     from rope import apply_rope, build_rope_cache
+
+# ---------------------------
+# RMSNorm for QK Normalization
+# ---------------------------
+class RMSNorm(nn.Module):
+    def __init__(self, dim, eps=1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+
+    def forward(self, x):
+        norm = x.pow(2).mean(dim=-1, keepdim=True)
+        x = x * torch.rsqrt(norm + self.eps)
+        return self.weight * x
+
 # ---------------------------
 # KV repetition (GQA)
 # ---------------------------
@@ -27,12 +43,6 @@ def repeat_kv(x, n_rep):
 
 
 # ---------------------------
-# QK normalization (Qwen trick)
-# ---------------------------
-def qk_norm(x, eps=1e-6):
-    return x / (x.norm(dim=-1, keepdim=True) + eps)
-
-# ---------------------------
 # Qwen-GQA Attention
 # ---------------------------
 class Qwen3Attention(nn.Module):
@@ -53,6 +63,10 @@ class Qwen3Attention(nn.Module):
         self.k_proj = nn.Linear(hidden_dim, num_kv_heads * self.head_dim, bias=False)
         self.v_proj = nn.Linear(hidden_dim, num_kv_heads * self.head_dim, bias=False)
 
+        # QK norm using learnable RMSNorm per head
+        self.q_norm = RMSNorm(self.head_dim)
+        self.k_norm = RMSNorm(self.head_dim)
+
         self.out_proj = nn.Linear(hidden_dim, hidden_dim, bias=False)
 
     def forward(self, x, cos, sin):
@@ -68,25 +82,25 @@ class Qwen3Attention(nn.Module):
         k = k.view(b, s, self.num_kv_heads, self.head_dim).transpose(1, 2)
         v = v.view(b, s, self.num_kv_heads, self.head_dim).transpose(1, 2)
 
-        # QK norm
-        q = q / (q.norm(dim=-1, keepdim=True) + 1e-6)
-        k = k / (k.norm(dim=-1, keepdim=True) + 1e-6)
+        # QK norm (RMSNorm along head_dim)
+        q = self.q_norm(q)
+        k = self.k_norm(k)
 
         # RoPE
         q = apply_rope(q, cos, sin)
         k = apply_rope(k, cos, sin)
 
-        # GQA
+        # GQA repeat
         k = repeat_kv(k, self.n_rep)
         v = repeat_kv(v, self.n_rep)
 
-        # attention
-        scale = self.head_dim ** -0.5
-
-        attn = torch.matmul(q, k.transpose(-2, -1)) * scale
-        attn = torch.softmax(attn, dim=-1)
-
-        out = torch.matmul(attn, v)
+        # Causal Attention using PyTorch's native optimized SDPA
+        out = F.scaled_dot_product_attention(
+            q, k, v,
+            attn_mask=None,
+            dropout_p=0.0,
+            is_causal=True
+        )
 
         # merge heads
         out = out.transpose(1, 2).contiguous().view(b, s, self.hidden_dim)
