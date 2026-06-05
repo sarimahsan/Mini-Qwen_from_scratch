@@ -1,79 +1,116 @@
-# Mini-Qwen: Autoregressive Language Model from Scratch
+# Mini-Qwen From Scratch
 
-A lightweight, modular, and academically rigorous implementation of the Qwen-3 architecture built entirely from scratch using PyTorch. This repository provides an end-to-end pipeline covering modern LLM design elements, custom optimization, Hugging Face dataset tokenization/streaming, and temperature-controlled autoregressive text generation.
+A compact, educational implementation of a Qwen-inspired autoregressive
+language model built with PyTorch. The project includes transformer components,
+a custom AdamW optimizer, a Hugging Face data pipeline, a training script, and
+temperature-controlled text generation.
 
----
+## Highlights
 
-## 🏗️ Architecture & Component Design
+- Grouped-query attention with QK normalization
+- Rotary position embeddings
+- SwiGLU feed-forward layers
+- RMSNorm transformer blocks
+- AdamW optimizer implemented from scratch
+- Hugging Face dataset and tokenizer integration
+- Top-k and top-p autoregressive sampling
 
-The implementation features state-of-the-art transformer components optimized for training stability and inference throughput:
+## Repository Structure
 
-*   **Grouped-Query Attention (GQA)** ([components/attention.py](file:///E:/qwen_from_scratch/components/attention.py)): Combines multi-query and multi-head attention styles by grouping query heads. This reduces KV cache size and memory access overhead during generation.
-*   **Rotary Position Embedding (RoPE)** ([components/rope.py](file:///E:/qwen_from_scratch/components/rope.py)): Applies relative positional information to the key and query projections by rotating them in the 2D complex plane.
-*   **SwiGLU Feed-Forward Network** ([components/feedforward.py](file:///E:/qwen_from_scratch/components/feedforward.py)): Employs a Swish-gated Linear Unit activation function ($x \cdot \text{silu}(x \cdot W_g) \cdot W_u$) instead of vanilla ReLU/GELU, improving learning capacity.
-*   **Root Mean Square Normalization (RMSNorm)** ([components/block.py](file:///E:/qwen_from_scratch/components/block.py)): Normalizes activations based on their root mean square, which is faster and equally effective compared to standard LayerNorm.
-*   **QK Normalization** ([components/attention.py](file:///E:/qwen_from_scratch/components/attention.py)): Normalizes Query and Key tensors before calculating dot-product attention, mitigating entropy collapse and enhancing training stability for deeper networks.
-*   **AdamW Optimizer from Scratch** ([optimizer.py](file:///E:/qwen_from_scratch/optimizer.py)): Custom implementation of decoupled weight-decay Adam ($L_2$ regularization decoupled from gradient update steps).
-
----
-
-## 📂 Repository Structure
-
-```
+```text
 qwen_from_scratch/
-│
-├── components/
-│   ├── attention.py       # Grouped-Query Attention (GQA) & QK Norm
-│   ├── block.py           # TransformerBlock & RMSNorm definitions
-│   ├── feedforward.py     # SwiGLU MLP projection layer
-│   ├── norm.py            # RMSProp optimizer module (for standalone tests)
-│   └── rope.py            # Rotary Position Embeddings (RoPE) cache & application
-│
-├── data.py                # Hugging Face dataset loading & tokenization pipeline
-├── generate.py            # Autoregressive decoding (Top-K / Top-P sampling)
-├── model.py               # Main MiniQwen model stack
-├── optimizer.py           # Custom AdamW optimizer
-├── train.py               # End-to-end training and evaluation script
-└── README.md              # Documentation
+|-- components/
+|   |-- attention.py       # Grouped-query attention and QK normalization
+|   |-- block.py           # Transformer block and RMSNorm
+|   |-- feedforward.py     # SwiGLU feed-forward network
+|   |-- norm.py            # Standalone RMSProp implementation
+|   `-- rope.py            # Rotary position embeddings
+|-- docs/
+|   `-- PROJECT_OVERVIEW.md
+|-- data.py                # Dataset loading and tokenization
+|-- generate.py            # Autoregressive generation utilities
+|-- model.py               # MiniQwen model definition
+|-- optimizer.py           # Custom AdamW optimizer
+|-- train.py               # Training and evaluation script
+|-- requirements.txt
+|-- CONTRIBUTING.md
+`-- LICENSE
 ```
 
----
+## Quick Start
 
-## 🚀 Quick Start
-
-### 1. Prerequisites
-Ensure you have Python 3.8+ installed along with PyTorch, Hugging Face Datasets, and Transformers:
+### 1. Create an Environment
 
 ```bash
-pip install torch datasets transformers
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-### 2. Training the Model
-Run the end-to-end pipeline to load `wikitext`, tokenize text sequences, train the Mini-Qwen model, and evaluate sample generation output:
+On macOS or Linux, activate the environment with:
+
+```bash
+source .venv/bin/activate
+```
+
+### 2. Run Smoke Tests
+
+```bash
+python model.py
+python generate.py
+```
+
+### 3. Train
 
 ```bash
 python train.py
 ```
 
-### 3. Autoregressive Generation
-You can run standalone generation tests using `generate.py`:
+The default training script uses:
 
-```bash
-python generate.py
+| Setting | Default |
+| --- | --- |
+| Dataset | `wikitext` |
+| Dataset config | `wikitext-2-raw-v1` |
+| Tokenizer | `gpt2` |
+| Sequence length | `128` |
+| Batch size | `8` |
+| Epochs | `3` |
+| Learning rate | `3e-4` |
+| Hidden dimension | `256` |
+| Layers | `4` |
+| Attention heads | `8` |
+| KV heads | `2` |
+
+## Generation
+
+`generate.py` exposes a reusable `generate` function:
+
+```python
+generated = generate(
+    model,
+    prompt_tensor,
+    max_new_tokens=50,
+    temperature=1.0,
+    top_k=50,
+    top_p=0.9,
+    device="cuda",
+)
 ```
 
----
+## Documentation
 
-## 📊 Pipeline Parameters
+See [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) for a concise map of
+the codebase and training flow.
 
-The pipeline is preconfigured with the following default hyperparameters:
+## Notes
 
-| Parameter | Default Value | Description |
-| :--- | :--- | :--- |
-| `dataset_name` | `"wikitext"` | Hugging Face dataset source |
-| `tokenizer_name` | `"gpt2"` | Pretrained tokenizer (50,257 vocab size) |
-| `seq_len` | `128` | Max context sequence length |
-| `batch_size` | `8` | Training batch size |
-| `learning_rate` | `3e-4` | Learning rate for AdamW optimizer |
-| `hidden_dim` | `256` | Model embedding hidden dimension |
-| `num_layers` | `4` | Number of Transformer block layers |
+- This project is intended for learning and experimentation.
+- The default configuration is small and readable, not optimized for benchmark
+  performance.
+- Training requires network access the first time Hugging Face downloads the
+  dataset and tokenizer.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).

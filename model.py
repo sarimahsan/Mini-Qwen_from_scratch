@@ -45,8 +45,8 @@ class MiniQwen(nn.Module):
         # embeddings
         x = self.embed(x)
 
-        # rope cache (recomputed each forward for simplicity)
-        cos, sin = build_rope_cache(s, self.blocks[0].attn.head_dim)
+        # RoPE cache is recomputed each forward for simplicity.
+        cos, sin = build_rope_cache(s, self.blocks[0].attn.head_dim, device=x.device)
 
         # transformer blocks
         for block in self.blocks:

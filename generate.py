@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 
 def top_k_logits(logits, k):
+    k = min(k, logits.size(-1))
     v, ix = torch.topk(logits, k)
     out = torch.full_like(logits, -float("inf"))
     out.scatter_(dim=-1, index=ix, src=v)
@@ -17,9 +18,11 @@ def top_p_logits(logits, p=0.9):
     mask[..., 1:] = mask[..., :-1].clone()
     mask[..., 0] = 0
 
-    sorted_logits[mask] = -float("inf")
+    sorted_logits = sorted_logits.masked_fill(mask, -float("inf"))
 
-    return sorted_logits.scatter(-1, sorted_idx, sorted_logits)
+    out = torch.full_like(logits, -float("inf"))
+    out.scatter_(dim=-1, index=sorted_idx, src=sorted_logits)
+    return out
 
 @torch.no_grad()
 def generate(
@@ -28,8 +31,12 @@ def generate(
     max_new_tokens=50,
     temperature=1.0,
     top_k=50,
+    top_p=None,
     device="cpu"
 ):
+    if temperature <= 0:
+        raise ValueError("temperature must be greater than 0")
+
     model.eval()
 
     x = prompt.to(device)
@@ -45,6 +52,10 @@ def generate(
         # top-k filtering
         if top_k is not None:
             logits = top_k_logits(logits, top_k)
+
+        # nucleus filtering
+        if top_p is not None:
+            logits = top_p_logits(logits, top_p)
 
         probs = F.softmax(logits, dim=-1)
 

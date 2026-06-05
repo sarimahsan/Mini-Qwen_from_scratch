@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build and packaging
+build/
+dist/
+*.egg-info/
+
+# Local configuration
+.env
+.env.*
+
+# Training outputs
+checkpoints/
+runs/
+wandb/
+*.pt
+*.pth
+*.ckpt
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
